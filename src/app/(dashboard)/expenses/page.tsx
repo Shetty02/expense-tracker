@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { format, addMonths, subMonths, parseISO } from 'date-fns'
-import { ChevronLeft, ChevronRight, Edit, Trash2, Calendar, ShoppingCart, SlidersHorizontal, AlertCircle, ChevronDown, Wallet } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Edit, Trash2, Calendar, ShoppingCart, SlidersHorizontal, AlertCircle, ChevronDown, Wallet, TrendingUp } from 'lucide-react'
 
 import { useExpenses } from '@/hooks/useExpenses'
 import { useProfile } from '@/hooks/useProfile'
@@ -10,11 +10,14 @@ import { useCategories } from '@/hooks/useCategories'
 import { AddExpenseModal } from '@/components/add-expense-modal'
 import { CategoryIcon, CategoryBadgeClasses } from '@/components/icons'
 import { formatCurrency, cn } from '@/lib/utils'
+import { useConfirm } from '@/contexts/ConfirmContext'
 
 export default function ExpensesPage() {
+  const confirm = useConfirm()
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date())
   const [selectedCategory, setSelectedCategory] = useState<string>('all')
   const [expenseToEdit, setExpenseToEdit] = useState<any>(null)
+  const [showCategoryDropdown, setShowCategoryDropdown] = useState(false)
 
   // Month picker popup states
   const [showMonthPicker, setShowMonthPicker] = useState(false)
@@ -42,7 +45,14 @@ export default function ExpensesPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (confirm('Are you sure you want to delete this expense?')) {
+    const confirmed = await confirm({
+      title: 'Delete Transaction',
+      message: 'Are you sure you want to delete this transaction? This action cannot be undone.',
+      confirmText: 'Delete',
+      cancelText: 'Cancel',
+      variant: 'danger'
+    })
+    if (confirmed) {
       try {
         await deleteExpense(id)
       } catch (err) {
@@ -120,22 +130,85 @@ export default function ExpensesPage() {
         </div>
 
         {/* Category Filter */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-950 text-zinc-500 border border-zinc-850">
+        <div className="relative flex items-center gap-3">
+          <div className="flex items-center justify-center w-8 h-8 rounded-lg bg-zinc-950 text-zinc-500 border border-zinc-850 shrink-0">
             <SlidersHorizontal className="h-4 w-4" />
           </div>
-          <select
-            value={selectedCategory}
-            onChange={(e) => setSelectedCategory(e.target.value)}
-            className="block w-full py-2 pl-3 pr-8 bg-zinc-950 border border-zinc-800 text-sm text-zinc-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-all select-none appearance-none cursor-pointer"
-          >
-            <option value="all">All Categories</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+          
+          <div className="relative w-full">
+            <button
+              type="button"
+              onClick={() => setShowCategoryDropdown(!showCategoryDropdown)}
+              className="flex items-center justify-between w-full min-w-[150px] py-2 px-4 bg-zinc-950 border border-zinc-850 hover:border-zinc-750 text-sm text-zinc-200 rounded-xl focus:outline-none focus:border-emerald-500 transition-all text-left cursor-pointer active:scale-95 duration-100"
+            >
+              <span className="truncate">
+                {selectedCategory === 'all' 
+                  ? 'All Categories' 
+                  : categories.find(c => c.id === selectedCategory)?.name || 'Select Category'}
+              </span>
+              <ChevronDown className={cn(
+                "h-4 w-4 text-zinc-500 transition-transform duration-200 ml-2 shrink-0",
+                showCategoryDropdown && "transform rotate-180 text-emerald-400"
+              )} />
+            </button>
+
+            {/* Custom Dropdown Popover */}
+            {showCategoryDropdown && (
+              <>
+                {/* Click outside backdrop */}
+                <div 
+                  className="fixed inset-0 z-40" 
+                  onClick={() => setShowCategoryDropdown(false)}
+                />
+                
+                {/* Menu list */}
+                <div className="absolute right-0 mt-1.5 w-56 bg-zinc-900 border border-zinc-800 rounded-xl shadow-2xl p-1.5 z-50 animate-in fade-in slide-in-from-top-2 duration-150 max-h-64 overflow-y-auto custom-scrollbar">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedCategory('all')
+                      setShowCategoryDropdown(false)
+                    }}
+                    className={cn(
+                      "flex items-center w-full px-3 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer text-left",
+                      selectedCategory === 'all'
+                        ? "bg-emerald-500/10 text-emerald-400 font-bold"
+                        : "text-zinc-400 hover:bg-zinc-850 hover:text-zinc-200"
+                    )}
+                  >
+                    All Categories
+                  </button>
+
+                  <div className="my-1 border-t border-zinc-850/50" />
+
+                  {categories.map((category) => {
+                    const isSelected = selectedCategory === category.id
+                    return (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedCategory(category.id)
+                          setShowCategoryDropdown(false)
+                        }}
+                        className={cn(
+                          "flex items-center gap-2.5 w-full px-3 py-2 text-xs font-semibold rounded-lg transition-colors cursor-pointer text-left",
+                          isSelected
+                            ? "bg-emerald-500/10 text-emerald-400 font-bold"
+                            : "text-zinc-400 hover:bg-zinc-850 hover:text-zinc-200"
+                        )}
+                      >
+                        <div className="flex items-center justify-center w-5 h-5 rounded-md bg-zinc-950/60 border border-zinc-850 text-zinc-400">
+                          <CategoryIcon name={category.icon} className="h-3 w-3" />
+                        </div>
+                        <span className="truncate">{category.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -237,18 +310,32 @@ export default function ExpensesPage() {
                             >
                               {expense.category?.name}
                             </span>
-                            <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">
-                              {expense.category?.type}
-                            </span>
+                            {expense.category?.type === 'savings' ? (
+                              <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[9px] font-bold uppercase tracking-wider">
+                                <TrendingUp className="h-2.5 w-2.5" />
+                                <span>Asset</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-zinc-500 uppercase tracking-wider font-medium">
+                                {expense.category?.type}
+                              </span>
+                            )}
                           </div>
                         </div>
                       </div>
 
                       {/* Right: amount + action triggers */}
                       <div className="flex items-center gap-4 pl-4 shrink-0">
-                        <span className="text-base font-bold text-zinc-100">
-                          {formatCurrency(Number(expense.amount), currencySymbol)}
-                        </span>
+                        <div className="flex flex-col items-end">
+                          <span className="text-base font-bold text-zinc-100">
+                            {formatCurrency(Number(expense.amount), currencySymbol)}
+                          </span>
+                          {expense.billing_cycle === 'annual' && (
+                            <span className="text-[9px] text-zinc-500 font-semibold mt-0.5 whitespace-nowrap">
+                              ≈ {formatCurrency(Number(expense.amount) / 12, currencySymbol)}/mo
+                            </span>
+                          )}
+                        </div>
                         
                         {/* Hover Actions (shown permanently on touch, hover on desktop) */}
                         <div className="flex items-center gap-1.5 opacity-90 sm:opacity-0 group-hover:opacity-100 transition-opacity">

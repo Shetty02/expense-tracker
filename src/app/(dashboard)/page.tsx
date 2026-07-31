@@ -48,6 +48,9 @@ export default function Dashboard() {
   const [pickerYear, setPickerYear] = useState<number>(new Date().getFullYear())
   const [pickerViewMode, setPickerViewMode] = useState<'months' | 'years'>('months')
 
+  // Breakdown chart active tab state
+  const [breakdownTab, setBreakdownTab] = useState<'spending' | 'investments'>('spending')
+
   const handleOpenMonthPicker = () => {
     setPickerYear(selectedMonth.getFullYear())
     setPickerViewMode('months')
@@ -101,7 +104,9 @@ export default function Dashboard() {
   // Aggregate current month spend
   let spentNeeds = 0
   let spentWants = 0
+  let spentSavings = 0
   const categorySpentMap: Record<string, number> = {}
+  const categoryInvestedMap: Record<string, number> = {}
 
   expenses.forEach((expense) => {
     const amount = Number(expense.amount)
@@ -110,20 +115,32 @@ export default function Dashboard() {
 
     if (categoryType === 'needs') {
       spentNeeds += amount
-    } else {
+      categorySpentMap[categoryName] = (categorySpentMap[categoryName] || 0) + amount
+    } else if (categoryType === 'wants') {
       spentWants += amount
+      categorySpentMap[categoryName] = (categorySpentMap[categoryName] || 0) + amount
+    } else if (categoryType === 'savings') {
+      spentSavings += amount
+      categoryInvestedMap[categoryName] = (categoryInvestedMap[categoryName] || 0) + amount
     }
-
-    categorySpentMap[categoryName] = (categorySpentMap[categoryName] || 0) + amount
   })
 
   const totalSpent = spentNeeds + spentWants
-  const savingsProgress = Math.max(0, income - totalSpent)
+  const investedThisMonth = spentSavings
+  const unspentIncome = Math.max(0, income - totalSpent)
+  const savingsProgress = spentSavings
 
-  // Format Pie Data
+  // Format Pie Data (Needs/Wants spending)
   const pieData = Object.keys(categorySpentMap).map((catName) => ({
     name: catName,
     value: categorySpentMap[catName],
+    color: CategoryColorMap[catName] || '#6b7280',
+  }))
+
+  // Format Investment Pie Data (Savings allocations)
+  const investmentPieData = Object.keys(categoryInvestedMap).map((catName) => ({
+    name: catName,
+    value: categoryInvestedMap[catName],
     color: CategoryColorMap[catName] || '#6b7280',
   }))
 
@@ -150,7 +167,7 @@ export default function Dashboard() {
       if (monthObj) {
         if (categoryType === 'needs') {
           monthObj.Needs += amount
-        } else {
+        } else if (categoryType === 'wants') {
           monthObj.Wants += amount
         }
       }
@@ -227,13 +244,16 @@ export default function Dashboard() {
       </div>
 
       {/* Stats Grid */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className={cn(
+        "grid grid-cols-1 sm:grid-cols-2 gap-4",
+        profile?.tracks_investments !== false ? "lg:grid-cols-4" : "lg:grid-cols-3"
+      )}>
         {/* Net Income */}
         <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between">
           <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
             Monthly Income
           </span>
-          <div className="mt-2 flex items-baseline gap-1">
+          <div className="mt-2">
             <span className="text-2xl font-bold text-zinc-100">{formatCurrency(income, currencySymbol)}</span>
           </div>
         </div>
@@ -243,26 +263,41 @@ export default function Dashboard() {
           <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
             Spent This Month
           </span>
-          <div className="mt-2 flex items-baseline gap-1">
+          <div className="mt-2">
             <span className="text-2xl font-bold text-zinc-100">{formatCurrency(totalSpent, currencySymbol)}</span>
-            <span className="text-xs text-zinc-500">
-              ({income > 0 ? Math.round((totalSpent / income) * 100) : 0}% of income)
-            </span>
+            <p className="text-[10px] text-zinc-500 font-semibold mt-0.5 whitespace-nowrap">
+              {income > 0 ? Math.round((totalSpent / income) * 100) : 0}% of income
+            </p>
           </div>
         </div>
 
-        {/* Net Savings Target */}
+        {/* Invested This Month */}
+        {profile?.tracks_investments !== false && (
+          <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between">
+            <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+              Invested This Month
+            </span>
+            <div className="mt-2">
+              <span className="text-2xl font-bold text-indigo-400">{formatCurrency(investedThisMonth, currencySymbol)}</span>
+              <p className="text-[10px] text-zinc-500 font-semibold mt-0.5 whitespace-nowrap">
+                {income > 0 ? Math.round((investedThisMonth / income) * 100) : 0}% of income
+              </p>
+            </div>
+          </div>
+        )}
+
+        {/* Unspent Income */}
         <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-5 flex flex-col justify-between">
           <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
             Unspent Income
           </span>
-          <div className="mt-2 flex items-baseline gap-1">
+          <div className="mt-2">
             <span className="text-2xl font-bold text-emerald-400">
-              {formatCurrency(savingsProgress, currencySymbol)}
+              {formatCurrency(unspentIncome, currencySymbol)}
             </span>
-            <span className="text-xs text-zinc-500">
-              (target: {formatCurrency(targetSavings, currencySymbol)})
-            </span>
+            <p className="text-[10px] text-zinc-500 font-semibold mt-0.5 whitespace-nowrap">
+              target: {formatCurrency(targetSavings, currencySymbol)}
+            </p>
           </div>
         </div>
       </div>
@@ -375,79 +410,130 @@ export default function Dashboard() {
               </div>
               <p className="text-[11px] text-zinc-500 leading-normal">
                 {savingsProgress >= targetSavings 
-                  ? "🎉 Solid! You are hitting your savings target by keeping expenses under control."
-                  : "💡 Try reducing discretionary wants to bring your savings back to target."}
+                  ? (profile?.tracks_investments !== false 
+                      ? "🎉 Solid! You are hitting your savings target with your investments."
+                      : "🎉 Solid! You are hitting your savings target.")
+                  : (profile?.tracks_investments !== false 
+                      ? "💡 Try investing more in mutual funds/stocks to hit your savings target."
+                      : "💡 You're under your savings target this month.")}
               </p>
             </div>
           </div>
         </div>
 
         {/* Spending breakdown chart */}
-        <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 flex flex-col justify-between min-h-[300px]">
-          <div>
-            <h2 className="text-base font-semibold">Spending Breakdown</h2>
-            <p className="text-xs text-zinc-500 mt-0.5">Categorized breakdown for current month</p>
-          </div>
-
-          <div className="flex-1 flex flex-col justify-center items-center py-4">
-            {expenses.length === 0 ? (
-              <div className="text-center py-8 space-y-4">
-                <div className="flex items-center justify-center w-12 h-12 rounded-full bg-zinc-950 text-zinc-600 border border-zinc-850 mx-auto">
-                  <ShoppingCart className="h-5 w-5" />
-                </div>
+        {(() => {
+          const hasInvestments = investmentPieData.length > 0 && profile?.tracks_investments !== false;
+          const activeTab = hasInvestments ? breakdownTab : 'spending';
+          return (
+            <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 flex flex-col justify-between min-h-[340px]">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-zinc-850/50">
                 <div>
-                  <h3 className="text-sm font-medium text-zinc-300">No expenses tracked</h3>
-                  <p className="text-xs text-zinc-500 mt-1">Tap below to add your first expense.</p>
+                  <h2 className="text-base font-semibold">
+                    {activeTab === 'spending' ? 'Spending Breakdown' : 'Investment Allocation'}
+                  </h2>
+                  <p className="text-xs text-zinc-500 mt-0.5">
+                    {activeTab === 'spending' ? 'Categorized breakdown of Needs and Wants' : 'Breakdown of your monthly assets'}
+                  </p>
                 </div>
-                <button
-                  onClick={openModal}
-                  className="inline-flex items-center gap-1.5 py-2 px-3 text-xs bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium rounded-lg active:scale-95 transition-all cursor-pointer"
-                >
-                  <Plus className="h-4 w-4" />
-                  <span>Add Expense</span>
-                </button>
-              </div>
-            ) : (
-              <div className="w-full h-48 md:h-52 relative flex items-center justify-center">
-                <ResponsiveContainer width="100%" height="100%">
-                  <PieChart>
-                    <Pie
-                      data={pieData}
-                      cx="50%"
-                      cy="50%"
-                      innerRadius={55}
-                      outerRadius={75}
-                      paddingAngle={4}
-                      dataKey="value"
-                    >
-                      {pieData.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip 
-                      formatter={(value) => formatCurrency(Number(value), currencySymbol)}
-                      contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '12px' }}
-                      itemStyle={{ color: '#f4f4f5' }}
-                    />
-                  </PieChart>
-                </ResponsiveContainer>
                 
-                {/* Labels legend listing on bottom or hover */}
+                {hasInvestments && (
+                  <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-850/80 self-start sm:self-auto shrink-0">
+                    <button
+                      onClick={() => setBreakdownTab('spending')}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                        activeTab === 'spending'
+                          ? "bg-zinc-850 text-emerald-400 font-bold"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      )}
+                    >
+                      Spending
+                    </button>
+                    <button
+                      onClick={() => setBreakdownTab('investments')}
+                      className={cn(
+                        "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                        activeTab === 'investments'
+                          ? "bg-zinc-850 text-indigo-400 font-bold"
+                          : "text-zinc-400 hover:text-zinc-200"
+                      )}
+                    >
+                      Investments
+                    </button>
+                  </div>
+                )}
               </div>
-            )}
-          </div>
 
-          {pieData.length > 0 && (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-zinc-400 border-t border-zinc-850/50 pt-4 mt-2">
-              {pieData.map((data, index) => (
-                <div key={index} className="flex items-center gap-1.5">
-                  <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: data.color }} />
-                  <span className="line-clamp-1">{data.name}: {formatCurrency(data.value, currencySymbol)}</span>
+              <div className="flex-1 flex flex-col justify-center items-center py-4">
+                {activeTab === 'spending' && pieData.length === 0 ? (
+                  <div className="text-center py-8 space-y-4">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-zinc-950 text-zinc-600 border border-zinc-850 mx-auto">
+                      <ShoppingCart className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-zinc-300">No spending tracked</h3>
+                      <p className="text-xs text-zinc-500 mt-1">Tap below to add your first expense.</p>
+                    </div>
+                    <button
+                      onClick={openModal}
+                      className="inline-flex items-center gap-1.5 py-2 px-3 text-xs bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-medium rounded-lg active:scale-95 transition-all cursor-pointer"
+                    >
+                      <Plus className="h-4 w-4" />
+                      <span>Add Expense</span>
+                    </button>
+                  </div>
+                ) : activeTab === 'investments' && investmentPieData.length === 0 ? (
+                  <div className="text-center py-8 space-y-4">
+                    <div className="flex items-center justify-center w-12 h-12 rounded-full bg-zinc-950 text-zinc-650 border border-zinc-850 mx-auto">
+                      <TrendingUp className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-medium text-zinc-300">No investments tracked</h3>
+                      <p className="text-xs text-zinc-500 mt-1">Add Mutual Funds/Stocks to see allocation.</p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="w-full h-48 md:h-52 relative flex items-center justify-center">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={activeTab === 'spending' ? pieData : investmentPieData}
+                          cx="50%"
+                          cy="50%"
+                          innerRadius={55}
+                          outerRadius={75}
+                          paddingAngle={4}
+                          dataKey="value"
+                        >
+                          {(activeTab === 'spending' ? pieData : investmentPieData).map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={entry.color} />
+                          ))}
+                        </Pie>
+                        <Tooltip 
+                          formatter={(value) => formatCurrency(Number(value), currencySymbol)}
+                          contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '12px' }}
+                          itemStyle={{ color: '#f4f4f5' }}
+                        />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
+                )}
+              </div>
+
+              {((activeTab === 'spending' && pieData.length > 0) || (activeTab === 'investments' && investmentPieData.length > 0)) && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[10px] text-zinc-400 border-t border-zinc-850/50 pt-4 mt-2">
+                  {(activeTab === 'spending' ? pieData : investmentPieData).map((data, index) => (
+                    <div key={index} className="flex items-center gap-1.5">
+                      <div className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: data.color }} />
+                      <span className="line-clamp-1">{data.name}: {formatCurrency(data.value, currencySymbol)}</span>
+                    </div>
+                  ))}
                 </div>
-              ))}
+              )}
             </div>
-          )}
-        </div>
+          );
+        })()}
       </div>
 
       {/* 6 Months historical spending Trend */}
@@ -461,7 +547,7 @@ export default function Dashboard() {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={last6Months}
-              margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+              margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
             >
               <XAxis 
                 dataKey="label" 

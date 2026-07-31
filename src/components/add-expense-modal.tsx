@@ -26,6 +26,7 @@ const expenseSchema = z.object({
   category_id: z.string({ message: 'Category is required' }).uuid('Invalid category'),
   expense_date: z.string().min(1, 'Date is required'),
   description: z.string().max(100, 'Max 100 characters').optional(),
+  billing_cycle: z.enum(['one_time', 'monthly', 'annual']).optional(),
 })
 
 type ExpenseFormValues = z.infer<typeof expenseSchema>
@@ -43,6 +44,13 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
   // Custom Date Picker states
   const [showDatePicker, setShowDatePicker] = useState(false)
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date())
+  const [calendarViewMode, setCalendarViewMode] = useState<'days' | 'months' | 'years'>('days')
+  const [calendarPickerYear, setCalendarPickerYear] = useState<number>(new Date().getFullYear())
+
+  // Sync picker year when calendar month is updated
+  useEffect(() => {
+    setCalendarPickerYear(calendarMonth.getFullYear())
+  }, [calendarMonth])
   
   // Use current date for scoping mutations (prefix validation handles cache updates)
   const { createExpense, isCreating, updateExpense, isUpdating } = useExpenses(new Date())
@@ -55,6 +63,7 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
     category_id: '',
     expense_date: new Date().toISOString().split('T')[0],
     description: '',
+    billing_cycle: 'one_time',
   }
 
   const {
@@ -69,6 +78,8 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
     defaultValues,
   })
 
+  const selectedCategoryId = watch('category_id')
+
   // Prefill if editing
   useEffect(() => {
     if (expenseToEdit) {
@@ -77,6 +88,7 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
         category_id: expenseToEdit.category_id,
         expense_date: expenseToEdit.expense_date,
         description: expenseToEdit.description || '',
+        billing_cycle: expenseToEdit.billing_cycle || 'one_time',
       })
       try {
         setCalendarMonth(new Date(expenseToEdit.expense_date))
@@ -86,6 +98,17 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
       setCalendarMonth(new Date())
     }
   }, [expenseToEdit, isModalOpen, reset])
+
+  // Reset billing cycle if category is changed and is not insurance
+  useEffect(() => {
+    if (categories && selectedCategoryId) {
+      const selectedCategory = categories.find(c => c.id === selectedCategoryId)
+      const isInsurance = selectedCategory?.name.toLowerCase().includes('insurance')
+      if (!isInsurance) {
+        setValue('billing_cycle', 'one_time')
+      }
+    }
+  }, [selectedCategoryId, categories, setValue])
 
   const generateCalendarDays = (monthDate: Date) => {
     const year = monthDate.getFullYear()
@@ -121,7 +144,7 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
     return days
   }
 
-  const selectedCategoryId = watch('category_id')
+
 
   const onSubmit = async (values: ExpenseFormValues) => {
     const expenseData = {
@@ -129,6 +152,7 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
       category_id: values.category_id,
       expense_date: values.expense_date,
       description: values.description || null,
+      billing_cycle: values.billing_cycle,
     }
     try {
       if (expenseToEdit) {
@@ -270,6 +294,46 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
             )}
           </div>
 
+          {/* Billing Cycle (Only visible for insurance-type categories) */}
+          {(() => {
+            const selectedCategory = categories.find(c => c.id === selectedCategoryId)
+            const isInsurance = selectedCategory?.name.toLowerCase().includes('insurance')
+            if (!isInsurance) return null
+
+            return (
+              <div className="space-y-2 animate-in slide-in-from-top-2 duration-200">
+                <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
+                  Billing Cycle
+                </label>
+                <div className="flex bg-zinc-955 p-1 rounded-xl border border-zinc-850">
+                  {(['one_time', 'monthly', 'annual'] as const).map((cycle) => {
+                    const isSelected = watch('billing_cycle') === cycle
+                    const labels: Record<string, string> = {
+                      one_time: 'One-time',
+                      monthly: 'Monthly',
+                      annual: 'Annual'
+                    }
+                    return (
+                      <button
+                        key={cycle}
+                        type="button"
+                        onClick={() => setValue('billing_cycle', cycle, { shouldDirty: true })}
+                        className={cn(
+                          "flex-1 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer text-center",
+                          isSelected
+                            ? "bg-zinc-850 text-emerald-400 font-bold"
+                            : "text-zinc-400 hover:text-zinc-200"
+                        )}
+                      >
+                        {labels[cycle]}
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
           {/* Date Picker */}
           <div className="space-y-1.5">
             <label className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">
@@ -277,7 +341,11 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
             </label>
             <button
               type="button"
-              onClick={() => setShowDatePicker(true)}
+              onClick={() => {
+                setCalendarViewMode('days')
+                setCalendarPickerYear(calendarMonth.getFullYear())
+                setShowDatePicker(true)
+              }}
               className={cn(
                 "flex items-center justify-between w-full px-4 py-2.5 bg-zinc-950 border border-zinc-800 rounded-xl text-sm text-zinc-50 focus:outline-none focus:border-emerald-500 transition-all text-left cursor-pointer",
                 errors.expense_date && "border-red-500"
@@ -336,7 +404,7 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4">
             {/* Backdrop */}
             <div 
-              className="fixed inset-0 bg-black/75 backdrop-blur-xs"
+              className="fixed inset-0 bg-black/75 backdrop-blur-xs animate-in fade-in duration-150"
               onClick={() => setShowDatePicker(false)}
             />
 
@@ -344,67 +412,191 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
             <div className="relative w-full max-w-xs bg-zinc-900 border border-zinc-800 rounded-2xl p-4 shadow-2xl z-10 transition-all transform animate-in zoom-in-95 duration-200">
               {/* Header */}
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-zinc-850">
-                <button
-                  type="button"
-                  onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
-                  className="p-1.5 rounded-lg hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 cursor-pointer"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </button>
-                
-                <span className="text-xs font-bold text-zinc-200">
-                  {format(calendarMonth, 'MMMM yyyy')}
-                </span>
-
-                <button
-                  type="button"
-                  onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
-                  className="p-1.5 rounded-lg hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 cursor-pointer"
-                >
-                  <ChevronRight className="h-4 w-4" />
-                </button>
-              </div>
-
-              {/* Weekday Names */}
-              <div className="grid grid-cols-7 gap-1 text-center mb-2">
-                {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
-                  <span key={d} className="text-[10px] font-bold text-zinc-650 uppercase tracking-wider">
-                    {d}
-                  </span>
-                ))}
-              </div>
-
-              {/* Days Grid */}
-              <div className="grid grid-cols-7 gap-1">
-                {generateCalendarDays(calendarMonth).map(({ date, isCurrentMonth }, i) => {
-                  const dateStr = format(date, 'yyyy-MM-dd')
-                  const isSelected = watch('expense_date') === dateStr
-                  const isCurrentToday = format(new Date(), 'yyyy-MM-dd') === dateStr
-
-                  return (
+                {calendarViewMode === 'days' && (
+                  <>
                     <button
-                      key={i}
                       type="button"
-                      onClick={() => {
-                        setValue('expense_date', dateStr, { shouldValidate: true })
-                        setShowDatePicker(false)
-                      }}
-                      className={cn(
-                        "aspect-square flex items-center justify-center text-[11px] font-semibold rounded-lg transition-all cursor-pointer active:scale-90 duration-100",
-                        isSelected
-                          ? "bg-emerald-500 text-zinc-950 font-bold"
-                          : isCurrentMonth
-                            ? isCurrentToday
-                              ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
-                              : "bg-zinc-950 text-zinc-300 hover:bg-zinc-800"
-                            : "text-zinc-700"
-                      )}
+                      onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() - 1, 1))}
+                      className="p-1.5 rounded-lg hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 cursor-pointer"
                     >
-                      {date.getDate()}
+                      <ChevronLeft className="h-4 w-4" />
                     </button>
-                  )
-                })}
+                    
+                    <button
+                      type="button"
+                      onClick={() => setCalendarViewMode('months')}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-zinc-850 hover:text-zinc-100 text-xs font-bold text-zinc-200 transition-colors cursor-pointer"
+                    >
+                      <span>{format(calendarMonth, 'MMMM yyyy')}</span>
+                      <ChevronDown className="h-3 w-3 text-zinc-500" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCalendarMonth(prev => new Date(prev.getFullYear(), prev.getMonth() + 1, 1))}
+                      className="p-1.5 rounded-lg hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+
+                {calendarViewMode === 'months' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarPickerYear(prev => prev - 1)}
+                      className="p-1.5 rounded-lg hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setCalendarViewMode('years')}
+                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg hover:bg-zinc-850 hover:text-zinc-100 text-xs font-bold text-zinc-200 transition-colors cursor-pointer"
+                    >
+                      <span>{calendarPickerYear}</span>
+                      <ChevronDown className="h-3 w-3 text-zinc-500" />
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCalendarPickerYear(prev => prev + 1)}
+                      className="p-1.5 rounded-lg hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
+
+                {calendarViewMode === 'years' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCalendarPickerYear(prev => prev - 12)}
+                      className="p-1.5 rounded-lg hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+                    
+                    <button
+                      type="button"
+                      onClick={() => setCalendarViewMode('months')}
+                      className="px-2.5 py-1 rounded-lg hover:bg-zinc-850 hover:text-zinc-100 text-xs font-bold text-zinc-200 transition-colors cursor-pointer"
+                    >
+                      <span>{calendarPickerYear - 5} - {calendarPickerYear + 6}</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setCalendarPickerYear(prev => prev + 12)}
+                      className="p-1.5 rounded-lg hover:bg-zinc-850 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </>
+                )}
               </div>
+
+              {/* Body Views */}
+              {calendarViewMode === 'days' && (
+                <>
+                  {/* Weekday Names */}
+                  <div className="grid grid-cols-7 gap-1 text-center mb-2">
+                    {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => (
+                      <span key={d} className="text-[10px] font-bold text-zinc-650 uppercase tracking-wider">
+                        {d}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Days Grid */}
+                  <div className="grid grid-cols-7 gap-1 animate-in fade-in duration-100">
+                    {generateCalendarDays(calendarMonth).map(({ date, isCurrentMonth }, i) => {
+                      const dateStr = format(date, 'yyyy-MM-dd')
+                      const isSelected = watch('expense_date') === dateStr
+                      const isCurrentToday = format(new Date(), 'yyyy-MM-dd') === dateStr
+
+                      return (
+                        <button
+                          key={i}
+                          type="button"
+                          onClick={() => {
+                            setValue('expense_date', dateStr, { shouldValidate: true })
+                            setShowDatePicker(false)
+                          }}
+                          className={cn(
+                            "aspect-square flex items-center justify-center text-[11px] font-semibold rounded-lg transition-all cursor-pointer active:scale-90 duration-100",
+                            isSelected
+                              ? "bg-emerald-500 text-zinc-950 font-bold"
+                              : isCurrentMonth
+                                ? isCurrentToday
+                                  ? "bg-emerald-500/10 text-emerald-400 border border-emerald-500/30"
+                                  : "bg-zinc-950 text-zinc-300 hover:bg-zinc-800"
+                                : "text-zinc-700"
+                          )}
+                        >
+                          {date.getDate()}
+                        </button>
+                      )
+                    })}
+                  </div>
+                </>
+              )}
+
+              {calendarViewMode === 'months' && (
+                <div className="grid grid-cols-3 gap-2 py-2 animate-in fade-in duration-100">
+                  {['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'].map((mon, index) => {
+                    const isSelected = calendarMonth.getMonth() === index && calendarMonth.getFullYear() === calendarPickerYear
+                    return (
+                      <button
+                        key={mon}
+                        type="button"
+                        onClick={() => {
+                          setCalendarMonth(new Date(calendarPickerYear, index, 1))
+                          setCalendarViewMode('days')
+                        }}
+                        className={cn(
+                          "py-3 text-xs font-semibold rounded-xl transition-all cursor-pointer active:scale-95 duration-100 text-center",
+                          isSelected
+                            ? "bg-emerald-500 text-zinc-950 font-bold"
+                            : "bg-zinc-950 text-zinc-300 hover:bg-zinc-850 hover:text-zinc-100"
+                        )}
+                      >
+                        {mon}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+
+              {calendarViewMode === 'years' && (
+                <div className="grid grid-cols-3 gap-2 py-2 animate-in fade-in duration-100">
+                  {Array.from({ length: 12 }, (_, idx) => calendarPickerYear - 5 + idx).map((year) => {
+                    const isSelected = calendarMonth.getFullYear() === year
+                    return (
+                      <button
+                        key={year}
+                        type="button"
+                        onClick={() => {
+                          setCalendarPickerYear(year)
+                          setCalendarMonth(prev => new Date(year, prev.getMonth(), 1))
+                          setCalendarViewMode('months')
+                        }}
+                        className={cn(
+                          "py-3 text-xs font-semibold rounded-xl transition-all cursor-pointer active:scale-95 duration-100 text-center",
+                          isSelected
+                            ? "bg-emerald-500 text-zinc-950 font-bold"
+                            : "bg-zinc-950 text-zinc-300 hover:bg-zinc-850 hover:text-zinc-100"
+                        )}
+                      >
+                        {year}
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
 
               {/* Action Buttons */}
               <div className="mt-4 pt-2 border-t border-zinc-850 flex gap-2">
@@ -412,18 +604,26 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
                   type="button"
                   onClick={() => {
                     setValue('expense_date', format(new Date(), 'yyyy-MM-dd'), { shouldValidate: true })
+                    setCalendarMonth(new Date())
+                    setCalendarViewMode('days')
                     setShowDatePicker(false)
                   }}
-                  className="flex-1 py-1.5 bg-zinc-950 hover:bg-zinc-850 border border-zinc-800 text-[10px] font-bold text-zinc-400 rounded-lg transition-colors cursor-pointer text-center"
+                  className="flex-1 py-1.5 bg-zinc-955 hover:bg-zinc-850 border border-zinc-800 text-[10px] font-bold text-zinc-400 rounded-lg transition-colors cursor-pointer text-center"
                 >
                   Today
                 </button>
                 <button
                   type="button"
-                  onClick={() => setShowDatePicker(false)}
+                  onClick={() => {
+                    if (calendarViewMode !== 'days') {
+                      setCalendarViewMode('days')
+                    } else {
+                      setShowDatePicker(false)
+                    }
+                  }}
                   className="flex-1 py-1.5 bg-zinc-850 hover:bg-zinc-800 text-[10px] font-bold text-zinc-300 rounded-lg transition-colors cursor-pointer text-center"
                 >
-                  Cancel
+                  {calendarViewMode !== 'days' ? 'Back' : 'Cancel'}
                 </button>
               </div>
             </div>

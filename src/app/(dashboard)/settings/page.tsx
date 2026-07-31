@@ -23,6 +23,7 @@ const settingsSchema = z
         { message: 'Income must be greater than 0' }
       ),
     currency: z.enum(['₹', '$', '£', '€']),
+    tracks_investments: z.boolean(),
     budget_split_needs: z.number({ message: 'Needs split is required' })
       .min(0, 'Min 0%')
       .max(100, 'Max 100%'),
@@ -73,6 +74,7 @@ export default function SettingsPage() {
       reset({
         monthly_income: formatNumberWithCommas(profile.monthly_income || 0) as any,
         currency: profile.currency,
+        tracks_investments: profile.tracks_investments ?? true,
         budget_split_needs: profile.budget_split_needs,
         budget_split_wants: profile.budget_split_wants,
         budget_split_savings: profile.budget_split_savings,
@@ -88,6 +90,7 @@ export default function SettingsPage() {
       await updateProfile({
         monthly_income: Number(values.monthly_income.replace(/,/g, '')),
         currency: values.currency,
+        tracks_investments: values.tracks_investments,
         budget_split_needs: values.budget_split_needs,
         budget_split_wants: values.budget_split_wants,
         budget_split_savings: values.budget_split_savings,
@@ -202,6 +205,34 @@ export default function SettingsPage() {
                 )
               })}
             </div>
+          </div>
+
+          {/* Show Investment Tracking Toggle */}
+          <div className="flex items-start justify-between gap-4 border-t border-zinc-850/60 pt-5">
+            <div className="space-y-0.5">
+              <label className="text-xs font-bold text-zinc-350 uppercase tracking-wider">
+                Show Investment Tracking
+              </label>
+              <p className="text-[11px] text-zinc-500 leading-relaxed max-w-[280px]">
+                Track mutual funds, stocks, and other investments separately from spending
+              </p>
+            </div>
+            
+            <button
+              type="button"
+              onClick={() => setValue('tracks_investments', !watch('tracks_investments'), { shouldDirty: true })}
+              className={cn(
+                "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none focus:ring-0",
+                watch('tracks_investments') ? "bg-emerald-500" : "bg-zinc-800"
+              )}
+            >
+              <span
+                className={cn(
+                  "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-zinc-950 shadow ring-0 transition duration-200 ease-in-out",
+                  watch('tracks_investments') ? "translate-x-5" : "translate-x-0"
+                )}
+              />
+            </button>
           </div>
 
           {/* Budget Splits Section */}

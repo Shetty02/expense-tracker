@@ -6,15 +6,24 @@ import { LayoutDashboard, History, Settings, Plus, LogOut } from 'lucide-react'
 import { useAddExpenseModal } from '@/contexts/AddExpenseContext'
 import { createClient } from '@/lib/supabase/client'
 import { cn } from '@/lib/utils'
+import { useConfirm } from '@/contexts/ConfirmContext'
 
 export function BottomNav() {
+  const confirm = useConfirm()
   const pathname = usePathname()
   const router = useRouter()
   const { openModal } = useAddExpenseModal()
   const supabase = createClient()
 
   const handleSignOut = async () => {
-    if (confirm('Are you sure you want to sign out?')) {
+    const confirmed = await confirm({
+      title: 'Sign Out',
+      message: 'Are you sure you want to sign out of your account?',
+      confirmText: 'Sign Out',
+      cancelText: 'Cancel',
+      variant: 'warning'
+    })
+    if (confirmed) {
       await supabase.auth.signOut()
       router.refresh()
     }

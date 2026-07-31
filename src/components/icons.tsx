@@ -26,7 +26,10 @@ import {
   PlusCircle,
   Calendar,
   AlertTriangle,
-  Train
+  Train,
+  LineChart,
+  ShieldCheck,
+  HeartHandshake
 } from 'lucide-react'
 
 export const IconMap: Record<string, React.ComponentType<{ className?: string }>> = {
@@ -57,7 +60,10 @@ export const IconMap: Record<string, React.ComponentType<{ className?: string }>
   PlusCircle,
   Calendar,
   AlertTriangle,
-  Train
+  Train,
+  LineChart,
+  ShieldCheck,
+  HeartHandshake
 }
 
 export function CategoryIcon({ name, className }: { name: string; className?: string }) {
@@ -74,6 +80,10 @@ export const CategoryColorMap: Record<string, string> = {
   'Bills & Utilities': '#eab308', // Yellow
   'Health': '#ef4444', // Red
   'Other': '#6b7280', // Grey
+  'Mutual Funds': '#6366f1', // Indigo
+  'Stocks': '#a855f7', // Purple
+  'Term Insurance': '#14b8a6', // Teal
+  'Health Insurance': '#f43f5e', // Rose
 }
 
 export const CategoryBadgeClasses: Record<string, { bg: string; border: string; text: string }> = {
@@ -85,5 +95,8 @@ export const CategoryBadgeClasses: Record<string, { bg: string; border: string; 
   'Bills & Utilities': { bg: 'bg-yellow-500/10', border: 'border-yellow-500/20', text: 'text-yellow-400' },
   'Health': { bg: 'bg-red-500/10', border: 'border-red-500/20', text: 'text-red-400' },
   'Other': { bg: 'bg-zinc-500/10', border: 'border-zinc-500/20', text: 'text-zinc-400' },
+  'Mutual Funds': { bg: 'bg-indigo-500/10', border: 'border-indigo-500/20', text: 'text-indigo-400' },
+  'Stocks': { bg: 'bg-purple-500/10', border: 'border-purple-500/20', text: 'text-purple-400' },
+  'Term Insurance': { bg: 'bg-teal-500/10', border: 'border-teal-500/20', text: 'text-teal-400' },
+  'Health Insurance': { bg: 'bg-rose-500/10', border: 'border-rose-500/20', text: 'text-rose-400' },
 }
-

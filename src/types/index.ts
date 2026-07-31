@@ -1,4 +1,4 @@
-export type CategoryType = 'needs' | 'wants';
+export type CategoryType = 'needs' | 'wants' | 'savings';
 
 export interface Profile {
   id: string;
@@ -7,6 +7,7 @@ export interface Profile {
   budget_split_wants: number;
   budget_split_savings: number;
   currency: '₹' | '$' | '£' | '€';
+  tracks_investments: boolean;
   created_at: string;
 }
 
@@ -26,6 +27,7 @@ export interface Expense {
   description: string | null;
   expense_date: string;
   created_at: string;
+  billing_cycle?: 'one_time' | 'monthly' | 'annual';
   category?: Category; // Joined category details
 }
 

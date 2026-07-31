@@ -9,6 +9,7 @@ create table public.profiles (
   budget_split_wants numeric default 30 check (budget_split_wants >= 0 and budget_split_wants <= 100),
   budget_split_savings numeric default 20 check (budget_split_savings >= 0 and budget_split_savings <= 100),
   currency text default '₹' check (currency in ('₹', '$', '£', '€')),
+  tracks_investments boolean not null default true,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null,
   
   -- Constraint to make sure splits sum to 100
@@ -23,7 +24,7 @@ create table public.categories (
   id uuid default gen_random_uuid() primary key,
   name text not null unique,
   icon text not null,
-  type text not null check (type in ('needs', 'wants')),
+  type text not null check (type in ('needs', 'wants', 'savings')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -38,6 +39,7 @@ create table public.expenses (
   amount numeric not null check (amount > 0),
   description text,
   expense_date date not null,
+  billing_cycle text not null default 'one_time' check (billing_cycle in ('one_time', 'monthly', 'annual')),
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
@@ -53,7 +55,11 @@ insert into public.categories (name, icon, type) values
   ('Travel', 'Train', 'wants'),
   ('Bills & Utilities', 'Receipt', 'needs'),
   ('Health', 'HeartPulse', 'needs'),
-  ('Other', 'HelpCircle', 'wants')
+  ('Other', 'HelpCircle', 'wants'),
+  ('Mutual Funds', 'TrendingUp', 'savings'),
+  ('Stocks', 'LineChart', 'savings'),
+  ('Term Insurance', 'ShieldCheck', 'needs'),
+  ('Health Insurance', 'HeartHandshake', 'needs')
 on conflict (name) do nothing;
 
 -- 5. RLS Policies
@@ -98,8 +104,8 @@ create policy "Users can delete own expenses"
 create or replace function public.handle_new_user()
 returns trigger as $$
 begin
-  insert into public.profiles (id, monthly_income, budget_split_needs, budget_split_wants, budget_split_savings, currency)
-  values (new.id, null, 50, 30, 20, '₹');
+  insert into public.profiles (id, monthly_income, budget_split_needs, budget_split_wants, budget_split_savings, currency, tracks_investments)
+  values (new.id, null, 50, 30, 20, '₹', true);
   return new;
 end;
 $$ language plpgsql security definer;
