@@ -42,11 +42,14 @@ Enables users to customize monthly income, select preferred currency globally, a
 
 1. **Multi-User Isolation**: Enforced at the database level using PostgreSQL **Row Level Security (RLS)**. No user can view, update, insert, or delete another user's profile, categories, or expenses under any circumstances.
 2. **Symmetrical Mobile Bottom Nav**: Balanced 5-column navigation layout tailored for phones, featuring Home, Expenses history, a floating central Add button, Settings, and a direct Sign Out tab.
-3. **Interactive Dark Mode Calendar**: Custom z-indexed date picker overlay with navigation chevrons and a monthly day-grid. Built to replace the clunky browser default calendars, providing a consistent dark-theme UI.
-4. **Interactive Year Grid**: Tapping the active year inside any month picker triggers a 12-year grid selection sheet (with decade chevrons shifting by 12-year chunks) to make multi-year back-jumps fast and touch-friendly.
-5. **Real-time Comma Formatting**: Currency amounts and net income inputs are formatted with grouping separators in real-time as you type (e.g. `50,000` or `1,00,000`). Utilizes `inputMode="decimal"` to display the native numeric keypad on touchscreens.
-6. **Budget Warning Guidance**: Dynamically warns you on the dashboard when category splits (Needs/Wants) exceed their configured safety limits.
-7. **PWA Standalone Support**: Includes a progressive web app manifest file and Apple mobile web meta tags to enable full-screen layout on home screen installation.
+3. **Custom Confirmation Modals**: Promisable visual confirmation dialogs (using a global React `useConfirm()` hook) built to replace browser native `confirm()` alerts with dark-mode, animated, non-blocking modal overlays.
+4. **Optional Investment Tracking**: Toggle investment tracking off in settings to hide investment cards, breakdown donut switchers, and warnings, adapting the app for users who only want to track core spending.
+5. **Billing Cycle & Monthly Annotations**: Track whether insurance categories are billed monthly, annually, or one-time. Annual payments display a helpful `≈ ₹X/mo` annotation in the ledger without altering monthly cash flow statistics.
+6. **Custom Dropdown Popovers**: Replaced native browser `<select>` controls with themed React popover components, complete with matching category icon badges and a stylized thin scrollbar.
+7. **Multi-View Interactive Date Picker**: Upgraded custom calendar modal header to trigger an instant **Month Selection Grid** and **Year Selection Grid** on click. Select historical dates years in the past in just 3 clicks.
+8. **Real-time Comma Formatting**: Currency amounts and net income inputs are formatted with grouping separators in real-time as you type (e.g. `50,000` or `1,00,000`). Utilizes `inputMode="decimal"` to display the native numeric keypad on touchscreens.
+9. **Budget Warning Guidance**: Dynamically warns you on the dashboard when category splits (Needs/Wants) exceed their configured safety limits.
+10. **PWA Standalone Support**: Includes a progressive web app manifest file and Apple mobile web meta tags to enable full-screen layout on home screen installation.
 
 ---
 
