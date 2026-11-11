@@ -5,11 +5,13 @@ import { useRouter } from 'next/navigation'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import * as z from 'zod'
-import { Settings as SettingsIcon, LogOut, Check, Save, AlertTriangle } from 'lucide-react'
+import { Settings as SettingsIcon, LogOut, Check, Save, AlertTriangle, Calendar, History, ChevronDown, ChevronUp } from 'lucide-react'
+import { format, parseISO, subMonths, addMonths } from 'date-fns'
 
 import { useProfile } from '@/hooks/useProfile'
+import { useIncomeHistory } from '@/hooks/useIncomeHistory'
 import { createClient } from '@/lib/supabase/client'
-import { cn, formatNumberWithCommas } from '@/lib/utils'
+import { cn, formatNumberWithCommas, formatCurrency } from '@/lib/utils'
 
 const settingsSchema = z
   .object({
@@ -49,8 +51,14 @@ export default function SettingsPage() {
   const router = useRouter()
   const supabase = createClient()
   const { profile, isLoading, updateProfile, isUpdating } = useProfile()
+  const { incomeHistory, saveMonthlyIncome, isSavingIncome } = useIncomeHistory()
   const [success, setSuccess] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  const currentMonthKey = format(new Date(), 'yyyy-MM')
+  const [effectiveMonth, setEffectiveMonth] = useState<string>(currentMonthKey)
+  const [protectPastMonths, setProtectPastMonths] = useState<boolean>(true)
+  const [showHistoryList, setShowHistoryList] = useState<boolean>(false)
 
   const {
     register,
@@ -86,15 +94,27 @@ export default function SettingsPage() {
     setSuccess(false)
     setError(null)
     try {
-      // Atomic update of splits to satisfy db constraint
+      const newIncome = Number(values.monthly_income.replace(/,/g, ''))
+      const previousIncome = profile?.monthly_income ? Number(profile.monthly_income) : 0
+
+      // 1. Record salary for effective month & preserve past months
+      await saveMonthlyIncome({
+        yearMonth: effectiveMonth,
+        newIncome,
+        effectiveFromCurrentMonth: protectPastMonths,
+        previousIncome: previousIncome !== newIncome ? previousIncome : undefined,
+      })
+
+      // 2. Atomic update of splits and latest income in profile
       await updateProfile({
-        monthly_income: Number(values.monthly_income.replace(/,/g, '')),
+        monthly_income: newIncome,
         currency: values.currency,
         tracks_investments: values.tracks_investments,
         budget_split_needs: values.budget_split_needs,
         budget_split_wants: values.budget_split_wants,
         budget_split_savings: values.budget_split_savings,
       })
+
       setSuccess(true)
       setTimeout(() => setSuccess(false), 3000)
     } catch (err: any) {
@@ -177,6 +197,95 @@ export default function SettingsPage() {
             {errors.monthly_income && (
               <p className="text-xs text-red-400 font-medium">{errors.monthly_income.message}</p>
             )}
+
+            {/* Effective Starting Month & Salary Protection */}
+            <div className="p-3.5 bg-zinc-950/80 border border-zinc-850 rounded-xl space-y-3 mt-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="text-zinc-300 font-semibold flex items-center gap-1.5">
+                  <Calendar className="h-3.5 w-3.5 text-emerald-400" />
+                  <span>Salary Effective From:</span>
+                </span>
+                <select
+                  value={effectiveMonth}
+                  onChange={(e) => setEffectiveMonth(e.target.value)}
+                  className="bg-zinc-900 border border-zinc-750 text-xs text-zinc-100 rounded-lg px-2.5 py-1.5 focus:outline-none focus:border-emerald-500 cursor-pointer font-medium"
+                >
+                  {[
+                    format(subMonths(new Date(), 2), 'yyyy-MM'),
+                    format(subMonths(new Date(), 1), 'yyyy-MM'),
+                    format(new Date(), 'yyyy-MM'),
+                    format(addMonths(new Date(), 1), 'yyyy-MM'),
+                  ].map((mKey) => (
+                    <option key={mKey} value={mKey}>
+                      {format(parseISO(`${mKey}-01`), 'MMMM yyyy')} {mKey === currentMonthKey ? '(This Month)' : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex items-center justify-between pt-2 border-t border-zinc-900 text-xs">
+                <div className="flex flex-col pr-3">
+                  <span className="text-zinc-200 font-medium text-xs">Protect past months' salary</span>
+                  <span className="text-[11px] text-zinc-500">
+                    Previous months will keep their historical salary and not be changed
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setProtectPastMonths(!protectPastMonths)}
+                  className={cn(
+                    "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                    protectPastMonths ? "bg-emerald-500" : "bg-zinc-800"
+                  )}
+                  aria-pressed={protectPastMonths}
+                >
+                  <span
+                    className={cn(
+                      "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out",
+                      protectPastMonths ? "translate-x-4" : "translate-x-0"
+                    )}
+                  />
+                </button>
+              </div>
+
+              {/* View/manage recorded salary history */}
+              {Object.keys(incomeHistory).length > 0 && (
+                <div className="pt-2 border-t border-zinc-900">
+                  <button
+                    type="button"
+                    onClick={() => setShowHistoryList(!showHistoryList)}
+                    className="flex items-center justify-between w-full text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 transition-colors cursor-pointer"
+                  >
+                    <span className="flex items-center gap-1.5">
+                      <History className="h-3 w-3" />
+                      <span>Recorded Monthly Salaries ({Object.keys(incomeHistory).length})</span>
+                    </span>
+                    {showHistoryList ? <ChevronUp className="h-3.5 w-3.5" /> : <ChevronDown className="h-3.5 w-3.5" />}
+                  </button>
+
+                  {showHistoryList && (
+                    <div className="mt-2 space-y-1.5 max-h-36 overflow-y-auto pr-1">
+                      {Object.keys(incomeHistory)
+                        .sort()
+                        .reverse()
+                        .map((mKey) => (
+                          <div
+                            key={mKey}
+                            className="flex items-center justify-between p-2 rounded-lg bg-zinc-900/70 border border-zinc-850 text-xs"
+                          >
+                            <span className="text-zinc-300 font-medium">
+                              {format(parseISO(`${mKey}-01`), 'MMMM yyyy')}
+                            </span>
+                            <span className="font-bold text-zinc-100">
+                              {formatCurrency(incomeHistory[mKey], profile?.currency || '₹')}
+                            </span>
+                          </div>
+                        ))}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Currency Field */}

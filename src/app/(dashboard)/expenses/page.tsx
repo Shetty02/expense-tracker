@@ -2,7 +2,7 @@
 
 import { useState } from 'react'
 import { format, addMonths, subMonths, parseISO } from 'date-fns'
-import { ChevronLeft, ChevronRight, Edit, Trash2, Calendar, ShoppingCart, SlidersHorizontal, AlertCircle, ChevronDown, Wallet, TrendingUp } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Edit, Trash2, Calendar, ShoppingCart, SlidersHorizontal, AlertCircle, ChevronDown, Wallet, TrendingUp, Sparkles } from 'lucide-react'
 
 import { useExpenses } from '@/hooks/useExpenses'
 import { useProfile } from '@/hooks/useProfile'
@@ -278,6 +278,12 @@ export default function ExpensesPage() {
                     text: 'text-zinc-400',
                   }
                   
+                  const isSelfExpense = expense.description?.includes('[Myself]') || expense.description?.includes('#self')
+                  const cleanDescription = expense.description
+                    ? expense.description.replace(/^\[Myself\]\s*/i, '').replace(/#self/i, '').trim()
+                    : ''
+                  const displayTitle = cleanDescription || expense.category?.name
+
                   return (
                     <div
                       key={expense.id}
@@ -297,7 +303,7 @@ export default function ExpensesPage() {
                         </div>
                         <div className="min-w-0">
                           <p className="text-sm font-semibold text-zinc-100 truncate">
-                            {expense.description || expense.category?.name}
+                            {displayTitle}
                           </p>
                           <div className="flex items-center gap-2 mt-1">
                             <span 
@@ -310,6 +316,12 @@ export default function ExpensesPage() {
                             >
                               {expense.category?.name}
                             </span>
+                            {isSelfExpense && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-purple-500/10 border border-purple-500/20 text-purple-400 text-[9px] font-bold uppercase tracking-wider">
+                                <Sparkles className="h-2.5 w-2.5" />
+                                <span>For Myself</span>
+                              </span>
+                            )}
                             {expense.category?.type === 'savings' ? (
                               <span className="inline-flex items-center gap-0.5 px-1.5 py-0.5 rounded bg-indigo-500/10 border border-indigo-500/20 text-indigo-400 text-[9px] font-bold uppercase tracking-wider">
                                 <TrendingUp className="h-2.5 w-2.5" />

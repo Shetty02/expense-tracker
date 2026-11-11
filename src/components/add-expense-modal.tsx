@@ -46,6 +46,7 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
   const [calendarMonth, setCalendarMonth] = useState<Date>(new Date())
   const [calendarViewMode, setCalendarViewMode] = useState<'days' | 'months' | 'years'>('days')
   const [calendarPickerYear, setCalendarPickerYear] = useState<number>(new Date().getFullYear())
+  const [isSpentOnMyself, setIsSpentOnMyself] = useState<boolean>(false)
 
   // Sync picker year when calendar month is updated
   useEffect(() => {
@@ -83,17 +84,22 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
   // Prefill if editing
   useEffect(() => {
     if (expenseToEdit) {
+      const desc = expenseToEdit.description || ''
+      const isMyself = desc.includes('[Myself]') || desc.includes('#self')
+      setIsSpentOnMyself(isMyself)
+
       reset({
         amount: formatNumberWithCommas(expenseToEdit.amount) as any,
         category_id: expenseToEdit.category_id,
         expense_date: expenseToEdit.expense_date,
-        description: expenseToEdit.description || '',
+        description: desc.replace(/^\[Myself\]\s*/i, '').replace(/#self/i, '').trim(),
         billing_cycle: expenseToEdit.billing_cycle || 'one_time',
       })
       try {
         setCalendarMonth(new Date(expenseToEdit.expense_date))
       } catch (e) {}
     } else {
+      setIsSpentOnMyself(false)
       reset(defaultValues)
       setCalendarMonth(new Date())
     }
@@ -147,11 +153,16 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
 
 
   const onSubmit = async (values: ExpenseFormValues) => {
+    const rawDesc = (values.description || '').replace(/^\[Myself\]\s*/i, '').replace(/#self/i, '').trim()
+    const finalDescription = isSpentOnMyself 
+      ? `[Myself] ${rawDesc}`.trim() 
+      : (rawDesc || null)
+
     const expenseData = {
       amount: Number(values.amount.replace(/,/g, '')),
       category_id: values.category_id,
       expense_date: values.expense_date,
-      description: values.description || null,
+      description: finalDescription,
       billing_cycle: values.billing_cycle,
     }
     try {
@@ -164,6 +175,7 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
         await createExpense(expenseData)
       }
       handleClose()
+      setIsSpentOnMyself(false)
       reset(defaultValues)
     } catch (err) {
       console.error(err)
@@ -364,6 +376,49 @@ export function AddExpenseModal({ expenseToEdit, onCloseEdit }: AddExpenseModalP
             {errors.expense_date && (
               <p className="text-xs text-red-400 font-medium">{errors.expense_date.message}</p>
             )}
+          </div>
+
+          {/* Spent on Myself (Personal / Self-Care) Toggle */}
+          <div className="p-3 bg-zinc-950 border border-zinc-800 hover:border-zinc-750 rounded-xl transition-all">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className={cn(
+                  "flex items-center justify-center w-8 h-8 rounded-lg transition-colors",
+                  isSpentOnMyself 
+                    ? "bg-purple-500/15 text-purple-400 border border-purple-500/30" 
+                    : "bg-zinc-900 text-zinc-500 border border-zinc-800"
+                )}>
+                  <Sparkles className="h-4 w-4" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <p className="text-xs font-semibold text-zinc-200">Spent on Myself</p>
+                    {isSpentOnMyself && (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[9px] font-bold uppercase tracking-wider">
+                        Personal
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-[11px] text-zinc-500">Track under your guilt-free personal allowance</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsSpentOnMyself(!isSpentOnMyself)}
+                className={cn(
+                  "relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none",
+                  isSpentOnMyself ? "bg-purple-600" : "bg-zinc-800"
+                )}
+                aria-pressed={isSpentOnMyself}
+              >
+                <span
+                  className={cn(
+                    "pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-md ring-0 transition duration-200 ease-in-out",
+                    isSpentOnMyself ? "translate-x-5" : "translate-x-0"
+                  )}
+                />
+              </button>
+            </div>
           </div>
 
           {/* Description */}

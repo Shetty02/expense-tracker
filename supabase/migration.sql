@@ -113,3 +113,33 @@ $$ language plpgsql security definer;
 create or replace trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- 7. Monthly Incomes Table (For tracking salary changes across different months)
+create table if not exists public.monthly_incomes (
+  id uuid default gen_random_uuid() primary key,
+  user_id uuid references auth.users on delete cascade not null,
+  year_month text not null, -- 'YYYY-MM'
+  amount numeric not null check (amount >= 0),
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null,
+  unique(user_id, year_month)
+);
+
+alter table public.monthly_incomes enable row level security;
+
+create policy "Users can view own monthly incomes" 
+  on public.monthly_incomes for select 
+  using (auth.uid() = user_id);
+
+create policy "Users can insert own monthly incomes" 
+  on public.monthly_incomes for insert 
+  with check (auth.uid() = user_id);
+
+create policy "Users can update own monthly incomes" 
+  on public.monthly_incomes for update 
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+create policy "Users can delete own monthly incomes" 
+  on public.monthly_incomes for delete 
+  using (auth.uid() = user_id);
+

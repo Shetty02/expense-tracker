@@ -1,13 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { 
-  TrendingUp, 
-  Sparkles, 
-  AlertTriangle, 
-  ShoppingCart, 
-  Film, 
-  Plus, 
+import {
+  TrendingUp,
+  Sparkles,
+  AlertTriangle,
+  ShoppingCart,
+  Film,
+  Plus,
   ArrowRight,
   TrendingDown,
   Info,
@@ -16,21 +16,22 @@ import {
   ChevronDown,
   Calendar
 } from 'lucide-react'
-import { 
-  PieChart, 
-  Pie, 
-  Cell, 
-  BarChart, 
-  Bar, 
-  XAxis, 
-  YAxis, 
-  Tooltip, 
-  ResponsiveContainer 
+import {
+  PieChart,
+  Pie,
+  Cell,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer
 } from 'recharts'
 import { subMonths, addMonths, format, startOfMonth, isSameMonth } from 'date-fns'
 
 import { useProfile } from '@/hooks/useProfile'
 import { useExpenses, useExpensesHistory } from '@/hooks/useExpenses'
+import { useIncomeHistory } from '@/hooks/useIncomeHistory'
 import { useAddExpenseModal } from '@/contexts/AddExpenseContext'
 import { formatCurrency, cn } from '@/lib/utils'
 import { CategoryColorMap } from '@/components/icons'
@@ -39,10 +40,11 @@ export default function Dashboard() {
   const [mounted, setMounted] = useState(false)
   const { profile, isLoading: loadingProfile } = useProfile()
   const { openModal } = useAddExpenseModal()
+  const incomeHistory = useIncomeHistory()
 
   // Use selected month state
   const [selectedMonth, setSelectedMonth] = useState<Date>(new Date())
-  
+
   // Month picker popup states
   const [showMonthPicker, setShowMonthPicker] = useState(false)
   const [pickerYear, setPickerYear] = useState<number>(new Date().getFullYear())
@@ -50,6 +52,28 @@ export default function Dashboard() {
 
   // Breakdown chart active tab state
   const [breakdownTab, setBreakdownTab] = useState<'spending' | 'investments'>('spending')
+
+  // Self-spend target percentage state (persisted in localStorage, default 15%)
+  const [selfSpendPct, setSelfSpendPct] = useState<number>(15)
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('expense_tracker_self_spend_pct')
+      if (saved) {
+        const parsed = Number(saved)
+        if (!isNaN(parsed) && parsed > 0 && parsed <= 50) {
+          setSelfSpendPct(parsed)
+        }
+      }
+    } catch { }
+  }, [])
+
+  const handleUpdateSelfSpendPct = (pct: number) => {
+    setSelfSpendPct(pct)
+    try {
+      localStorage.setItem('expense_tracker_self_spend_pct', String(pct))
+    } catch { }
+  }
 
   const handleOpenMonthPicker = () => {
     setPickerYear(selectedMonth.getFullYear())
@@ -90,7 +114,7 @@ export default function Dashboard() {
   }
 
   const currencySymbol = profile?.currency || '₹'
-  const income = profile?.monthly_income || 0
+  const income = incomeHistory.getIncomeForMonth(selectedMonth)
 
   // Calculate limits based on splits
   const splitNeedsPct = profile?.budget_split_needs || 50
@@ -185,6 +209,28 @@ export default function Dashboard() {
   const needsStyles = getProgressStyles(spentNeeds, limitNeeds)
   const wantsStyles = getProgressStyles(spentWants, limitWants)
 
+  // Track expenses explicitly tagged with [Myself] or #self
+  const selfTaggedExpenses = expenses.filter(
+    (e) => e.description?.includes('[Myself]') || e.description?.includes('#self')
+  )
+  const spentOnSelfTagged = selfTaggedExpenses.reduce((sum, e) => sum + Number(e.amount), 0)
+
+  // Target allowance calculation
+  const selfSpendBudget = income * (selfSpendPct / 100)
+  const hasTaggedSelfExpenses = selfTaggedExpenses.length > 0
+  const activeSelfSpent = hasTaggedSelfExpenses ? spentOnSelfTagged : spentWants
+  const remainingSelfSpend = Math.max(0, selfSpendBudget - activeSelfSpent)
+  const isOverSelfBudget = activeSelfSpent > selfSpendBudget
+  const overSelfAmount = activeSelfSpent - selfSpendBudget
+  const selfProgressPct = selfSpendBudget > 0 ? (activeSelfSpent / selfSpendBudget) * 100 : 0
+
+  const getSelfProgressStyles = (ratio: number) => {
+    if (ratio >= 100) return { barColor: 'bg-red-500', textColor: 'text-red-400' }
+    if (ratio >= 80) return { barColor: 'bg-amber-500', textColor: 'text-amber-400' }
+    return { barColor: 'bg-gradient-to-r from-purple-500 to-pink-500', textColor: 'text-purple-400' }
+  }
+  const selfStyles = getSelfProgressStyles(selfProgressPct)
+
   return (
     <div className="space-y-8">
       {/* Welcome Header */}
@@ -195,7 +241,7 @@ export default function Dashboard() {
             Tracking budget for {format(selectedMonth, 'MMMM yyyy')}
           </p>
         </div>
-        
+
         {/* Month Selector & Controls */}
         <div className="flex items-center justify-between md:justify-start gap-3 w-full md:w-auto">
           <div className="flex items-center justify-between gap-1.5 bg-zinc-950 border border-zinc-850 p-1.5 rounded-xl flex-1 md:flex-initial">
@@ -206,7 +252,7 @@ export default function Dashboard() {
             >
               <ChevronLeft className="h-4.5 w-4.5" />
             </button>
-            
+
             <button
               onClick={handleOpenMonthPicker}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg hover:bg-zinc-900 text-xs font-semibold text-zinc-200 transition-colors cursor-pointer flex-1 md:flex-initial justify-center"
@@ -322,7 +368,7 @@ export default function Dashboard() {
 
       {/* Main Grid: Budget Split Guidance + Donut Chart */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
+
         {/* Budget split guidance card */}
         <div className="bg-zinc-900 border border-zinc-800/80 rounded-2xl p-6 space-y-6">
           <div>
@@ -343,11 +389,11 @@ export default function Dashboard() {
                 </span>
               </div>
               <div className="w-full h-3 bg-zinc-955 rounded-full overflow-hidden border border-zinc-800/50">
-                <div 
+                <div
                   className={cn(
-                    "h-full rounded-full transition-all duration-500", 
+                    "h-full rounded-full transition-all duration-500",
                     needsStyles.barColor
-                  )} 
+                  )}
                   style={{ width: `${Math.min(100, limitNeeds > 0 ? (spentNeeds / limitNeeds) * 100 : 0)}%` }}
                 />
               </div>
@@ -373,14 +419,51 @@ export default function Dashboard() {
                 </span>
               </div>
               <div className="w-full h-3 bg-zinc-955 rounded-full overflow-hidden border border-zinc-800/50">
-                <div 
+                <div
                   className={cn(
-                    "h-full rounded-full transition-all duration-500", 
+                    "h-full rounded-full transition-all duration-500",
                     wantsStyles.barColor
-                  )} 
+                  )}
                   style={{ width: `${Math.min(100, limitWants > 0 ? (spentWants / limitWants) * 100 : 0)}%` }}
                 />
               </div>
+
+              {/* Integrated "Spent on Myself" sub-tracker inside Wants */}
+              <div className="p-3 bg-zinc-955 border border-purple-500/20 rounded-xl space-y-2 mt-2">
+                <div className="flex items-center justify-between text-xs">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="h-3.5 w-3.5 text-purple-400" />
+                    <span className="text-zinc-200 font-semibold">Spent on Myself</span>
+                    <span className="px-1.5 py-0.2 rounded bg-purple-500/15 border border-purple-500/30 text-purple-300 text-[9px] font-bold">
+                      15% Target: {formatCurrency(income * 0.15, currencySymbol)}
+                    </span>
+                  </div>
+                  <span className="font-bold text-purple-300">
+                    {formatCurrency(spentOnSelfTagged, currencySymbol)}
+                  </span>
+                </div>
+
+                <div className="w-full h-1.5 bg-zinc-900 rounded-full overflow-hidden border border-zinc-800/60">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-500 to-pink-500 rounded-full transition-all duration-500"
+                    style={{ width: `${Math.min(100, (income * 0.15) > 0 ? (spentOnSelfTagged / (income * 0.15)) * 100 : 0)}%` }}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                  <span>
+                    {spentOnSelfTagged > (income * 0.15) ? (
+                      <span className="text-red-400 font-medium">Over target by {formatCurrency(spentOnSelfTagged - (income * 0.15), currencySymbol)}</span>
+                    ) : (
+                      <span>{formatCurrency(Math.max(0, (income * 0.15) - spentOnSelfTagged), currencySymbol)} left for yourself</span>
+                    )}
+                  </span>
+                  <span className="text-zinc-500 text-[10px]">
+                    {hasTaggedSelfExpenses ? `${selfTaggedExpenses.length} tagged transactions` : 'Toggle "Spent on Myself" in Add Expense'}
+                  </span>
+                </div>
+              </div>
+
               {spentWants >= limitWants * 0.8 && (
                 <div className="flex items-center gap-1.5 text-xs mt-1 text-zinc-400">
                   <Info className="h-3.5 w-3.5" />
@@ -403,19 +486,19 @@ export default function Dashboard() {
                 </span>
               </div>
               <div className="w-full h-3 bg-zinc-955 rounded-full overflow-hidden border border-zinc-800/50">
-                <div 
-                  className="h-full bg-emerald-500 rounded-full transition-all duration-500" 
+                <div
+                  className="h-full bg-emerald-500 rounded-full transition-all duration-500"
                   style={{ width: `${Math.min(100, targetSavings > 0 ? (savingsProgress / targetSavings) * 100 : 0)}%` }}
                 />
               </div>
               <p className="text-[11px] text-zinc-500 leading-normal">
-                {savingsProgress >= targetSavings 
-                  ? (profile?.tracks_investments !== false 
-                      ? "🎉 Solid! You are hitting your savings target with your investments."
-                      : "🎉 Solid! You are hitting your savings target.")
-                  : (profile?.tracks_investments !== false 
-                      ? "💡 Try investing more in mutual funds/stocks to hit your savings target."
-                      : "💡 You're under your savings target this month.")}
+                {savingsProgress >= targetSavings
+                  ? (profile?.tracks_investments !== false
+                    ? "🎉 Solid! You are hitting your savings target with your investments."
+                    : "🎉 Solid! You are hitting your savings target.")
+                  : (profile?.tracks_investments !== false
+                    ? "💡 Try investing more in mutual funds/stocks to hit your savings target."
+                    : "💡 You're under your savings target this month.")}
               </p>
             </div>
           </div>
@@ -436,7 +519,7 @@ export default function Dashboard() {
                     {activeTab === 'spending' ? 'Categorized breakdown of Needs and Wants' : 'Breakdown of your monthly assets'}
                   </p>
                 </div>
-                
+
                 {hasInvestments && (
                   <div className="flex bg-zinc-950 p-1 rounded-xl border border-zinc-850/80 self-start sm:self-auto shrink-0">
                     <button
@@ -510,7 +593,7 @@ export default function Dashboard() {
                             <Cell key={`cell-${index}`} fill={entry.color} />
                           ))}
                         </Pie>
-                        <Tooltip 
+                        <Tooltip
                           formatter={(value) => formatCurrency(Number(value), currencySymbol)}
                           contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '12px' }}
                           itemStyle={{ color: '#f4f4f5' }}
@@ -549,17 +632,17 @@ export default function Dashboard() {
               data={last6Months}
               margin={{ top: 10, right: 10, left: 10, bottom: 0 }}
             >
-              <XAxis 
-                dataKey="label" 
-                stroke="#71717a" 
-                fontSize={11} 
-                tickLine={false} 
+              <XAxis
+                dataKey="label"
+                stroke="#71717a"
+                fontSize={11}
+                tickLine={false}
                 axisLine={false}
               />
-              <YAxis 
-                stroke="#71717a" 
-                fontSize={11} 
-                tickLine={false} 
+              <YAxis
+                stroke="#71717a"
+                fontSize={11}
+                tickLine={false}
                 axisLine={false}
                 tickFormatter={(value) => `${currencySymbol}${value}`}
               />
@@ -589,7 +672,7 @@ export default function Dashboard() {
       {showMonthPicker && (
         <div className="fixed inset-0 z-50 flex items-center justify-center">
           {/* Backdrop */}
-          <div 
+          <div
             className="fixed inset-0 bg-black/60 backdrop-blur-sm"
             onClick={() => setShowMonthPicker(false)}
           />
@@ -607,7 +690,7 @@ export default function Dashboard() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  
+
                   <button
                     type="button"
                     onClick={() => setPickerViewMode('years')}
@@ -634,7 +717,7 @@ export default function Dashboard() {
                   >
                     <ChevronLeft className="h-4 w-4" />
                   </button>
-                  
+
                   <button
                     type="button"
                     onClick={() => setPickerViewMode('months')}
@@ -661,10 +744,10 @@ export default function Dashboard() {
                   'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
                   'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'
                 ].map((monthName, index) => {
-                  const isSelected = 
-                    selectedMonth.getFullYear() === pickerYear && 
+                  const isSelected =
+                    selectedMonth.getFullYear() === pickerYear &&
                     selectedMonth.getMonth() === index
-                  
+
                   return (
                     <button
                       key={monthName}
@@ -690,7 +773,7 @@ export default function Dashboard() {
                 {Array.from({ length: 12 }, (_, i) => {
                   const y = pickerYear - 5 + i
                   const isSelected = selectedMonth.getFullYear() === y
-                  
+
                   return (
                     <button
                       key={y}
@@ -712,7 +795,7 @@ export default function Dashboard() {
                 })}
               </div>
             )}
-            
+
             {/* Cancel Button */}
             <button
               type="button"
